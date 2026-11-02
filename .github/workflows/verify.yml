@@ -1,0 +1,82 @@
+name: Verify (reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 정적 검사 및 빌드
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: 설정 검증
+        run: npm run check
+      - name: 단위 테스트
+        run: npm run test:unit
+      - name: production 빌드
+        run: npm run build -- --env=production
+      - name: 산출물 검사
+        run: npm run verify:dist
+      - name: dist artifact 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  e2e:
+    name: E2E (Desktop/Mobile Chromium)
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: 검증된 dist 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Playwright Chromium 설치
+        run: npx playwright install --with-deps chromium
+      - name: 빌드된 dist 대상 E2E
+        run: npm run test:e2e
+      - name: 실패 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  summary:
+    name: 실행 요약
+    needs: [verify, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary 작성
+        run: |
+          {
+            echo "## 검증 결과"
+            echo "- verify: ${{ needs.verify.result }}"
+            echo "- e2e: ${{ needs.e2e.result }}"
+            echo ""
+            echo "실패 시: 대상 커밋에서 \`npm ci && npm run check && npm run test:unit && npm run build -- --env=production && npm run verify:dist && npm run test:e2e\` 로 재현한 뒤 다시 실행하세요."
+          } >> "$GITHUB_STEP_SUMMARY"

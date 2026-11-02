@@ -1,0 +1,180 @@
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '운영 반영을 확인하려면 PROMOTE 를 입력하세요.'
+        required: true
+        type: string
+      release_note:
+        description: '릴리스 메모 (비우면 자동 생성)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-production
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: 승인 및 대상 확인
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      prod-repo: ${{ steps.config.outputs.prod-repo }}
+      prod-url: ${{ steps.config.outputs.prod-url }}
+      app-version: ${{ steps.config.outputs.app-version }}
+      app-id: ${{ steps.config.outputs.app-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: PROMOTE 입력 확인
+        run: |
+          if [ "${{ inputs.confirm }}" != "PROMOTE" ]; then
+            echo "::error::confirm 값이 PROMOTE가 아닙니다."
+            exit 1
+          fi
+      - name: 소스 저장소·브랜치 제한
+        run: |
+          DEV_REPO=$(node -e "console.log(require('./app.config.json').devRepo)")
+          if [ "${GITHUB_REPOSITORY}" != "${DEV_REPO}" ]; then
+            echo "::error::운영 승격은 개발 저장소(${DEV_REPO})에서만 실행할 수 있습니다. (현재: ${GITHUB_REPOSITORY})"
+            exit 1
+          fi
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::운영 승격은 main 브랜치에서만 실행할 수 있습니다. preview 확인 후 main에 병합하세요."
+            exit 1
+          fi
+      - name: 설정 로드
+        id: config
+        run: |
+          node -e '
+            const fs = require("fs");
+            const c = require("./app.config.json");
+            const v = require("./package.json").version;
+            console.log("prod-repo=" + c.prodRepo);
+            console.log("prod-url=" + c.prodUrl);
+            console.log("app-version=" + v);
+            console.log("app-id=" + c.appId);
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              "## 승격 대상\n" +
+              "- 운영 저장소: " + c.prodRepo + "\n" +
+              "- 운영 URL: " + c.prodUrl + "\n" +
+              "- 앱 버전: v" + v + "\n" +
+              "- 소스: " + process.env.GITHUB_SHA + "\n");
+          ' >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: 소스 재검증
+    needs: guard
+    uses: ./.github/workflows/verify.yml
+
+  publish:
+    name: 운영 저장소 전달
+    needs: [guard, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    environment:
+      name: production
+      url: ${{ needs.guard.outputs.prod-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 검증된 dist 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: 산출물 출처 확인
+        run: |
+          SHA=$(node -e "console.log(require('./dist/build-info.json').sourceSha)")
+          if [ "${SHA}" != "${GITHUB_SHA}" ]; then
+            echo "::error::dist 산출물의 source SHA(${SHA})가 이 실행의 커밋(${GITHUB_SHA})과 다릅니다. 검증되지 않은 산출물은 승격하지 않습니다."
+            exit 1
+          fi
+          ENV=$(node -e "console.log(require('./dist/build-info.json').environment)")
+          if [ "${ENV}" != "production" ]; then
+            echo "::error::dist 산출물의 환경(${ENV})이 production이 아닙니다."
+            exit 1
+          fi
+      - name: 운영 저장소로 전달
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          PROD_REPO: ${{ needs.guard.outputs.prod-repo }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+          APP_VERSION: ${{ needs.guard.outputs.app-version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_TOKEN}" ]; then
+            echo "::error::DEPLOY_TOKEN 미설정 — 운영 저장소에 push할 인증이 없습니다. 저장소 secrets에 운영 저장소용 fine-grained token(Contents: Read and write)을 설정하세요. (비밀값은 출력하지 않습니다.)"
+            exit 1
+          fi
+          REPO_URL="https://x-access-token:${DEPLOY_TOKEN}@github.com/${PROD_REPO}.git"
+          rm -rf prod-repo
+          if git clone --quiet --depth=1 --branch main "${REPO_URL}" prod-repo 2>/dev/null; then
+            cd prod-repo
+            git rm -rq . 2>/dev/null || true
+          else
+            echo "운영 저장소에 main 브랜치가 없습니다 — 새 산출물 전용 main으로 시작합니다."
+            git init -q -b main prod-repo
+            cd prod-repo
+            git remote add origin "${REPO_URL}"
+          fi
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          cp -r ../dist/. .
+          git add -A
+          git commit --allow-empty -F - <<EOF
+          release: v${APP_VERSION}
+
+          note: ${RELEASE_NOTE:-자동 생성}
+          source: ${GITHUB_REPOSITORY}@${GITHUB_SHA}
+          run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          git push origin main
+      - name: 릴리스 기록 (GitHub Release + 롤백용 artifact)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_ID: ${{ needs.guard.outputs.app-id }}
+          APP_VERSION: ${{ needs.guard.outputs.app-version }}
+          RELEASE_NOTE: ${{ inputs.release_note }}
+        run: |
+          set -euo pipefail
+          TAG="v${APP_VERSION}"
+          ZIP="${APP_ID}-v${APP_VERSION}-dist.zip"
+          (cd dist && zip -qr "../${ZIP}" .)
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            # 태그가 가리키는 커밋 확인 (릴리스 태그 이동 금지)
+            TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null || echo "")
+            if [ -n "${TAG_SHA}" ] && [ "${TAG_SHA}" != "${GITHUB_SHA}" ]; then
+              echo "::error::릴리스 태그 ${TAG} 이 다른 커밋(${TAG_SHA})에 존재합니다. 공개된 버전을 다른 내용으로 재출시할 수 없습니다. package.json version 을 올린 뒤 다시 승격하세요."
+              exit 1
+            fi
+            gh release upload "${TAG}" "${ZIP}" --clobber
+            echo "기존 릴리스 ${TAG} 에 artifact만 갱신습니다."
+          else
+            NOTES="${RELEASE_NOTE:-${APP_ID} v${APP_VERSION} 운영 승격 (run ${GITHUB_RUN_ID})}"
+            gh release create "${TAG}" "${ZIP}" \
+              --target "${GITHUB_SHA}" \
+              --title "${TAG} (production)" \
+              --notes "${NOTES}"
+          fi
+
+  smoke:
+    name: 운영 smoke
+    needs: [guard, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 운영 URL 검증
+        env:
+          SMOKE_URL: ${{ needs.guard.outputs.prod-url }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_ENV: production
+        run: node scripts/smoke.mjs
