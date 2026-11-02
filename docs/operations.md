@@ -30,6 +30,13 @@
  [운영] demo-app → GitHub Pages
 ```
 
+## 템플릿 저장소 자체 (miniapp-template)
+
+- Pages Source = **GitHub Actions**로 켜 둔다. main push마다 deploy-dev가 실행되어
+  템플릿 자신의 배포 흐름(build→E2E→Pages→smoke)을 실전 검증한다.
+  → 사이트: https://zzexxous-pixel.github.io/miniapp-template/ (dev 배지 표시)
+- 이 저장소에서는 promote가 실행되지 않는다(devRepo 제한). Release·롤백 실증은 demo-app-test에서.
+
 ## 최초 설정 체크리스트 (저장소마다 1회)
 
 개발 저장소(demo-app-test):

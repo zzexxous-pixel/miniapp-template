@@ -137,9 +137,14 @@ npm run test:smoke      # 배포 후 smoke (SMOKE_URL 필수)
   E2E는 CI로만 확인 가능.
 - GitHub 리포 설정(template 여부·Pages·environment·PREVIEW_REF·DEPLOY_TOKEN)과
   demo-app-test/demo-app 생성·실배포는 사용자 승인 대기.
-- 참고: miniapp-template 저장소 자체에는 Pages가 없으므로 main 병합 후 deploy-dev의
-  Pages 배포 job은 실패한다(예제 실증은 demo-app-test에서). 템플릿 저장소에서
-  deploy-dev를 수동 전용으로 바꿀지 Pages를 켜둘지는 사용자 결정 필요.
+
+### 결정: 템플릿 저장소(self)에도 Pages 켜기 (2026-11-02)
+
+- 목적: main push마다 deploy-dev(build→E2E→Pages→smoke)가 템플릿 자기 자신을 검증.
+- 운영 승격은 계속 차단됨: promote.yml의 devRepo(demo-app-test) 제한 때문.
+- 실행: GitHub UI에서 Settings → Pages → Source: **GitHub Actions** (1회).
+  agent 토큰(fine-grained)에 Pages scope이 없어 API로 켤 수 없음 — 사용자 UI 작업 필요.
+- 켜기 전에는 PR 병합 후 첫 deploy-dev의 Pages 배포 job이 실패하는 것이 정상.
 
 ## 다음 단계
 
