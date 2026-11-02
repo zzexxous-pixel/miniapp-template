@@ -1,0 +1,120 @@
+name: Deploy Dev (dev + single preview)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-dev
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 빌드 및 조립
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: 설정 검증
+        run: npm run check
+      - name: 단위 테스트
+        run: npm run test:unit
+      - name: development 빌드 (dist)
+        run: npm run build -- --env=development
+      - name: Playwright E2E (dev dist 대상)
+        run: npx playwright install --with-deps chromium && npm run test:e2e
+      - name: 산출물 검사
+        run: npm run verify:dist
+      - name: preview 조립 (PREVIEW_REF 지정 시)
+        env:
+          PREVIEW_REF: ${{ vars.PREVIEW_REF }}
+        run: |
+          if [ -n "${PREVIEW_REF}" ]; then
+            REF="${PREVIEW_REF#origin/}"
+            echo "preview 대상: ${REF}"
+            git fetch --depth=1 origin "${REF}"
+            # main 워크트리를 오염시키지 않도록 별도 워크트리에 checkout
+            git worktree add --detach .preview-src FETCH_HEAD
+            (cd .preview-src && npm run build -- --env=preview --out=../preview-dist)
+          else
+            echo "PREVIEW_REF 미지정 — preview 없음"
+          fi
+      - name: 사이트 조립 (dev 루트 + preview)
+        run: |
+          mkdir -p site
+          cp -r dist/. site/
+          if [ -d preview-dist ]; then
+            mkdir -p site/preview
+            node -e "const c=require('./app.config.json');const p=c.preview?.path||'preview';if(p.includes('/')||p.includes('..')){throw new Error('app.config.json preview.path 가 부적합합니다: '+p)}"
+            PREVIEW_PATH=$(node -e "console.log(require('./app.config.json').preview?.path||'preview')")
+            rm -rf "site/${PREVIEW_PATH}"
+            mkdir -p "site/${PREVIEW_PATH}"
+            cp -r preview-dist/. "site/${PREVIEW_PATH}/"
+            echo "preview 배치 완료: ${PREVIEW_PATH}/"
+            cat "site/${PREVIEW_PATH}/build-info.json"
+          fi
+      - name: 조립 산출물 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Pages 배포
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 최신 커밋 확인 (push 실행만)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 오래된 queued 실행이 최신 배포를 덮어쓰지 못하게 배포 직전에 검사한다.
+          LATEST=$(gh api "repos/$GITHUB_REPOSITORY/commits?sha=$GITHUB_REF_NAME&per_page=1" --jq '.[0].sha')
+          if [ "${LATEST}" != "${GITHUB_SHA}" ]; then
+            echo "::error::이 실행의 커밋(${GITHUB_SHA})은 더 이상 main 최신(${LATEST})이 아닙니다. 오래된 실행의 배포를 막았습니다. 최신 실행의 배포 결과를 확인하세요."
+            exit 1
+          fi
+      - name: 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+      - name: Pages 설정
+        uses: actions/configure-pages@v4
+      - name: 업로드
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: 배포
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  smoke:
+    name: 배포 후 smoke
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: smoke 검사
+        env:
+          SMOKE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: node scripts/smoke.mjs

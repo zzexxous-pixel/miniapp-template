@@ -1,0 +1,11 @@
+node_modules/
+dist/
+_site/
+playwright-report/
+test-results/
+.DS_Store
+*.log
+site/
+preview-dist/
+.preview-src/
+google_drive/

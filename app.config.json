@@ -1,0 +1,40 @@
+{
+  "appId": "demo-app",
+  "shortName": "demo-app",
+  "title": "demo-app",
+  "description": "미니 앱 템플릿 예제 앱",
+  "devRepo": "zzexxous-pixel/demo-app-test",
+  "prodRepo": "zzexxous-pixel/demo-app",
+  "devUrl": "https://zzexxous-pixel.github.io/demo-app-test/",
+  "prodUrl": "https://zzexxous-pixel.github.io/demo-app/",
+  "preview": {
+    "path": "preview",
+    "environment": "pre",
+    "refVariable": "PREVIEW_REF",
+    "defaultRef": ""
+  },
+  "pwa": {
+    "enabled": true,
+    "offline": "partial"
+  },
+  "build": {
+    "runtimeFiles": [
+      ".nojekyll",
+      "index.html",
+      "style.css",
+      "app.js",
+      "sw.js",
+      "manifest.webmanifest",
+      "manifest-dev.webmanifest",
+      "manifest-pre.webmanifest",
+      "assets/icon-192.png",
+      "assets/icon-512.png",
+      "assets/apple-touch-icon.png"
+    ],
+    "command": "node scripts/build.mjs"
+  },
+  "checks": {
+    "extra": []
+  },
+  "templateVersion": "1.0.0"
+}
