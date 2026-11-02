@@ -132,10 +132,14 @@ npm run test:smoke      # 배포 후 smoke (SMOKE_URL 필수)
   루트·/preview/ smoke 통과 (캐시 접두사 dev/pre 격리 확인)
 - 고의 실패 시나리오 확인: 환경 미지정 거부 / 필수 파일 누락 거부 / allowlist 외 파일 거부
 - workflow YAML 4개 파싱 통과 (js-yaml)
-- **미검증 (샌드박스 제약)**: Playwright E2E 실실행 — 브라우저 다운로드가 네트워크 차단으로 불가.
-  CI(verify.yml e2e / deploy-dev)에서 첫 실행으로 확인 필요.
+- **PR #1 CI 통과 (2026-11-02)**: verify + **Playwright E2E 16개(Desktop/Mobile Chromium) 전부 통과** —
+  검증된 dist artifact를 그대로 대상으로 실행됨. 샌드박스는 브라우저 다운로드 차단이라
+  E2E는 CI로만 확인 가능.
 - GitHub 리포 설정(template 여부·Pages·environment·PREVIEW_REF·DEPLOY_TOKEN)과
   demo-app-test/demo-app 생성·실배포는 사용자 승인 대기.
+- 참고: miniapp-template 저장소 자체에는 Pages가 없으므로 main 병합 후 deploy-dev의
+  Pages 배포 job은 실패한다(예제 실증은 demo-app-test에서). 템플릿 저장소에서
+  deploy-dev를 수동 전용으로 바꿀지 Pages를 켜둘지는 사용자 결정 필요.
 
 ## 다음 단계
 
