@@ -138,19 +138,27 @@ npm run test:smoke      # 배포 후 smoke (SMOKE_URL 필수)
 - GitHub 리포 설정(template 여부·Pages·environment·PREVIEW_REF·DEPLOY_TOKEN)과
   demo-app-test/demo-app 생성·실배포는 사용자 승인 대기.
 
-### 결정: 템플릿 저장소(self)에도 Pages 켜기 (2026-11-02)
+### 결정: 템플릿 저장소(self)에도 Pages 켜기 (2026-11-02) — 실행 완료
 
 - 목적: main push마다 deploy-dev(build→E2E→Pages→smoke)가 템플릿 자기 자신을 검증.
 - 운영 승격은 계속 차단됨: promote.yml의 devRepo(demo-app-test) 제한 때문.
-- 실행: GitHub UI에서 Settings → Pages → Source: **GitHub Actions** (1회).
-  agent 토큰(fine-grained)에 Pages scope이 없어 API로 켤 수 없음 — 사용자 UI 작업 필요.
-- 켜기 전에는 PR 병합 후 첫 deploy-dev의 Pages 배포 job이 실패하는 것이 정상.
+- 사용자 승인 후 진행: Pages Source=GitHub Actions UI 활성화(2026-11-02, agent 토큰에 Pages scope 없음)
+  → **PR #1 병합(merge commit)** → main 첫 self-deploy 전 과정 성공:
+  - 빌드 및 조립 ✓ (dev dist 대상 E2E 16개 통과 포함)
+  - Pages 배포 ✓ ("최신 커밋 확인" 가드 포함, site=dev+preview 조립 1회 배포)
+  - 배포 후 smoke ✓ (실제 Pages URL 대상, 8s — 전파 지연 없이 즉시 통과)
+  - CI(run 41535264826) ✓ 병렬 통과
+  - 라이브: https://zzexxous-pixel.github.io/miniapp-template/ (dev 배지·dev 설치 이름)
+  - PREVIEW_REF 미설정 → /preview/ 없음(정상 상태). preview 교체 실증은 demo-app-test에서.
 
 ## 다음 단계
 
-1. 이 브랜치를 push하고 PR → CI에서 E2E 첫 실행 확인.
-2. 사용자 승인 후: demo-app-test(비공개 가능) 생성 → main push → Pages Source=GitHub Actions 확인
-   → preview 교체/종료 정책 실증 → demo-app(운영) 생성 → Pages main/(root) →
+1. (완료 2026-11-02) PR #1 병합 + 템플릿 저장소 첫 self-deploy(smoke 포함) 성공.
+2. 사용자 승인 후: demo-app-test 생성 → main push → Pages Source=GitHub Actions 확인
+   → PREVIEW_REF로 preview 교체/종료 정책 실증 → demo-app(운영) 생성 → Pages main/(root) →
    production environment + required reviewer 설정 → DEPLOY_TOKEN(fine-grained, demo-app Contents RW) 등록
    → promote 실행 → smoke·릴리스·롤백(Release zip) 실증.
 3. 예제 검증 완료 후 기존 한자·하트튠 적용 계획 수립 (별도 승인).
+
+주의: agent 샌드박스는 github.io로 직접 curl 불가(네트워크 allowlist) — 라이브 URL 확인은
+workflow의 smoke job 결과로 검증한다.
