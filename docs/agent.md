@@ -30,6 +30,34 @@
    | Secrets 쓰기 | `PUT .../actions/secrets/*` | 403 |
    | 읽기(공개 저장소 메타·Pages·environments) | `GET ...` | 정상 (공개 정보라 인증 없이도 조회됨) |
    → 시드 push는 실행하지 않았다. 실패한 프로브가 만든 부산물은 없다(빈 저장소 그대로, main 없음).
+### 2차 프로브 (2026-11-03, 사용자가 App 설치를 All repositories + RW 로 재연결한 뒤)
+
+결과: **여전히 demo-app-test 쓰기 403.** 원인 규명을 위해 miniapp-template(권한 보유)을 대조군으로
+같은 API를 호출했다.
+
+| API | miniapp-template (세션 저장소) | demo-app-test (범위 밖) |
+|---|---|---|
+| Contents 쓰기 (`PUT /contents/...`) | **200 성공** | 403 (integration) |
+| Environments 쓰기 (`PUT /environments/...`) | 403 | 403 |
+| Pages 쓰기 (`POST /pages`) | 403 | 403 |
+| Actions variables 쓰기 | 403 | 403 |
+| git push | 성공 | 403 Permission denied |
+
+해석(중요):
+
+1. **세션 토큰은 App 설치 토큰 전체가 아니라 "세션 선택 저장소"로 범위가 좁혀진 토큰**이다.
+   설치 설정이 All repositories 여도 세션 저장소 밖은 Contents 쓰기조차 불가(403 integration).
+   → App 설치 화면에서 더 줄 권한은 없다. 범위는 **세션의 저장소 선택**이 정한다.
+2. **Environments·Pages·Secrets·Variables 권한은 Arena App 에 아예 없다**
+   (권한 요약: actions·code·issues·pull requests·repository hooks·workflows 만 Read/Write).
+   → `production` environment+reviewer, `DEPLOY_TOKEN`, `PREVIEW_REF` variable, Pages 켜기는
+     **범위 문제가 아니라 권한 문제**이므로 사용자가 저장소 설정에서 직접 해야 한다.
+     (Pages 켜기는 demo-app-test·miniapp-template 모두 이미 완료 상태)
+
+부수 정리: 대조군 Contents 쓰기가 **main 에 실제 커밋을 만들었다**(`dfb9f4b` "probe", PROBE2.md).
+즉시 삭제 커밋(`a77ca92`)으로 되돌렸다. main 히스토리에 프로브 커밋 2개가 남았고(강제 푸시로
+지우지 않음 — 소스 force push 금지 원칙), 이로 인한 deploy-dev 재실행은 정상 흐름으로 둔다.
+
 3. **시드 도구 추가** — `scripts/seed.mjs` + `npm run seed`
    - 커밋된 tree만 이동(작업 트리·index 무변경), 더러운 트리면 중단
    - `app.config.json` devRepo ≠ 대상이면 거부, 원격 main이 이미 있으면 거부(`--replace`만 허용)
@@ -40,10 +68,15 @@
 4. **문서** — operations.md에 "저장소 시드" 절차 추가, 단일 preview 정책에
    "variable 변경은 설정 권한 필요 / `preview.defaultRef`는 커밋으로 지정 → 에이전트만으로 preview 실증 가능" 보강.
 
-### 진행을 막고 있는 것 (사용자 조치 필요)
+### 진행을 막고 있는 것 (사용자 조치 필요) — 2차 프로브로 원인 확정
 
-- Arena의 GitHub 연결에 `zzexxous-pixel/demo-app-test`(와 이후 `demo-app`) 쓰기 권한 추가.
-  이것 없이는 시드 push·preview 실증·promote 실증 모두 불가.
+- **데모 저장소 쓰기**: App 설치(All repositories)로는 해결되지 않는다. 세션 토큰이 세션 저장소로
+  좁혀지므로, demo-app-test 실증은 **세션 저장소를 demo-app-test 로 전환**해야 시작된다.
+  (빈 저장소라 base 커밋이 필요 → GitHub 웹에서 README 1개 추가 후 전환. 이후 `npm run seed --replace`로
+  깨끗한 시드 커밋을 main 에 올리고, 그 전환 세션에서 dev/preview 실증을 이어간다.)
+- **저장소 설정(권한 자체가 없음)**: `production` environment + required reviewers, secret `DEPLOY_TOKEN`,
+  (선택) repo variable `PREVIEW_REF`. App 권한에 Environments/Pages/Secrets/Variables 가 없어
+  에이전트가 대신할 수 없다 → 사용자 직접 설정.
 - 위 연결이 열리면 에이전트가 바로 할 수 있는 것: `npm run seed` → main push → deploy-dev 실행 확인
   → `gh run list`/smoke 결과 확인 → preview 브랜치 + `preview.defaultRef` 커밋으로 preview 교체·종료 실증.
 - 사용자만 할 수 있는 것(설정 화면 필요): `production` environment + required reviewers 1명,
