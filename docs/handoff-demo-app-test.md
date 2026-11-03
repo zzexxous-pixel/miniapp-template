@@ -1,6 +1,6 @@
 # 인수인계 — demo-app-test 실증 (새 세션용 요청문)
 
-작성: 2026-11-03, 템플릿 브랜치 `arena/11443e40-miniapp-template` (`22864c8`)
+작성: 2026-11-03, 템플릿 브랜치 `arena/11443e40-miniapp-template` (해당 브랜치 최신 커밋)
 용도: 세션 저장소를 `zzexxous-pixel/demo-app-test` 로 전환한 새 세션에 그대로 붙여넣는 요청문.
 
 ---
@@ -13,8 +13,9 @@ demo-app-test 실증을 이어서 진행해줘. 시드 push부터 시작.
 
 [현재 상태]
 - 템플릿 저장소 zzexxous-pixel/miniapp-template 은 public. 직전 세션이 브랜치
-  arena/11443e40-miniapp-template (HEAD 22864c8)에 시드 도구(scripts/seed.mjs, npm run seed)와
-  문서 갱신을 푸시해 뒀다.
+  arena/11443e40-miniapp-template 최신 커밋에 시드 도구(scripts/seed.mjs, npm run seed)와
+  문서·인수인계문을 푸시해 뒀다.
+- 아래 클론 명령의 브랜치명은 arena/11443e40-miniapp-template 이다 (숫자 11443e40).
 - demo-app-test 는 아직 앱 내용이 없다 (README base 커밋만 있음).
   Pages Source=GitHub Actions 는 이미 켜져 있다 (build_type=workflow 확인됨).
 - 이 세션의 토큰은 이 저장소(demo-app-test)로만 범위가 정해져 있다.
