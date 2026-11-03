@@ -23,6 +23,8 @@ npm run init -- --app-id=my-app --short-name="내 앱" --dev-repo=owner/my-app-t
 | `npm run build -- --env=preview` | preview 빌드 |
 | `npm run test:e2e` | Playwright E2E (Desktop/Mobile Chromium) |
 | `npm run serve` | 로컬 정적 서버 |
+| `npm run seed -- --dry-run` | 빈 개발 저장소 시드 사전 검사 + 쓰기 권한 프로브 |
+| `npm run seed` | 빈 개발 저장소(`devRepo`)로 최초 시드 |
 | `npm run test:smoke` | 배포 후 smoke |
 
 ## 환경
@@ -37,7 +39,7 @@ npm run init -- --app-id=my-app --short-name="내 앱" --dev-repo=owner/my-app-t
 
 - `app.config.json` — 앱 설정
 - `package.json` — 앱 버전 원본
-- `scripts/` — 빌드·검증·smoke·서빙·초기화
+- `scripts/` — 빌드·검증·smoke·서빙·초기화·시드
 - `src/` — 예제 앱
 - `tests/` — unit + e2e
 - `.github/workflows/` — CI, verify, dev 배포, 운영 승격

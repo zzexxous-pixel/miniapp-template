@@ -37,6 +37,33 @@
   → 사이트: https://zzexxous-pixel.github.io/miniapp-template/ (dev 배지 표시)
 - 이 저장소에서는 promote가 실행되지 않는다(devRepo 제한). Release·롤백 실증은 demo-app-test에서.
 
+## 저장소 시드 (빈 개발 저장소에 최초 1회)
+
+템플릿 내용을 새 개발 저장소(`demo-app-test`)로 옮기는 절차. `npm run seed`가 담당한다.
+
+원칙:
+
+- 대상은 `app.config.json`의 `devRepo`와 일치해야 한다 (운영·템플릿 저장소로의 시드 사고 방지).
+- 커밋된 상태의 tree만 옮긴다 — 작업 트리가 더러우면 중단하고, 작업 트리·index는 건드리지 않는다.
+- 대상 저장소에 이미 `main`이 있으면 거부한다. 시드는 **빈 저장소 최초 1회** 전용이다.
+- 시드 커밋 메시지에 `source-repo`·`source-sha`·`template-version`·`app-version`을 기록한다.
+  앱 저장소 히스토리는 시드 커밋에서 시작한다(템플릿 히스토리를 끌고 가지 않음).
+
+절차:
+
+1. `npm run seed -- --dry-run`
+   원격 상태 확인 + **쓰기 권한 프로브**(실제 푸시와 동일한 인증 경로로 `git push --dry-run`).
+   403이면 아무것도 쓰지 않고 원인·조치를 출력하고 중단한다.
+2. `npm run seed`
+   시드 커밋 생성 → `refs/heads/main` 푸시. 이후 main push이므로 `deploy-dev`가 자동 실행된다
+   (워크플로 파일도 함께 시드되므로 별도 활성화 불필요).
+3. 결과 확인: `gh run list -R <devRepo> -L 5`
+4. 이후 갱신은 일반 main push/PR로만 한다. 재시드는 `--replace`(파괴적, 히스토리 소실)이며
+   정말 필요할 때만 쓴다.
+
+agent 토큰이 대상 저장소에 접근할 수 없으면 시드가 쓰기 프로브 단계에서 실패한다.
+그때는 사용자가 Arena의 GitHub 연결에 해당 저장소 권한을 추가해야 한다.
+
 ## 최초 설정 체크리스트 (저장소마다 1회)
 
 개발 저장소(demo-app-test):
@@ -61,6 +88,10 @@
 - preview는 하나만 유지한다.
 - 대상 선택 순서: repo variable `PREVIEW_REF` → 비어 있으면 `app.config.json` 의 `preview.defaultRef` → 둘 다 없으면 preview 없이 배포.
   (`origin/` 접두어는 자동 제거. variable 은 임시 대상 지정·긴급 제거용, defaultRef 는 저장소에 커밋되는 상시 대상)
+- variable 변경은 저장소 설정 권한이 필요하지만 `preview.defaultRef` 는 커밋으로 지정된다.
+  → 저장소 설정 권한이 없는 주체(agent·CI)만으로도 preview 실증이 가능하다.
+    preview 브랜치를 만들고 defaultRef 를 그 브랜치로 커밋 → main 병합 → 다음 dev 배포에서 재생성.
+  실증 종료 시 defaultRef 를 `''` 로 되돌리는 커밋을 올린다.
 - 대상은 워크트리로 분리 checkout해 빌드하므로 main 워크트리에 영향 없음.
   preview 배포본의 build-info.sourceSha에 preview 커밋이 기록되어 대상을 추적할 수 있다.
 - PREVIEW_REF가 비어 있으면 preview 없이 dev만 배포된다 (preview 없음 = 정상 상태).

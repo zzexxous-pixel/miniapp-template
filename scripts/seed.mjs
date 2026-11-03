@@ -166,7 +166,13 @@ try {
   fail(`푸시에 실패했습니다.\n${output}`);
 }
 
-info(`시드 완료: https://github.com/${target}/commit/${seedCommit}`);
+const githubUrl = remoteUrl === `https://github.com/${target}.git`;
+if (githubUrl) {
+  info(`시드 완료: https://github.com/${target}/commit/${seedCommit}`);
+} else {
+  info(`시드 완료: ${remoteUrl} → refs/heads/main (${seedCommit.slice(0, 7)}) — GitHub 대상이 아니므로 저장소 설정 안내는 생략`);
+  process.exit(0);
+}
 info('다음 단계:');
 console.log(`
   1. deploy-dev 워크플로가 main push 로 자동 실행되는지 확인

@@ -1,6 +1,6 @@
 # Agent handoff — miniapp-template
 
-최종 갱신: 2026-11-02. 다음 세션은 이 문서를 먼저 읽고, 변경·검증·배포 결과와 새 결정을 계속 갱신한다.
+최종 갱신: 2026-11-03. 다음 세션은 이 문서를 먼저 읽고, 변경·검증·배포 결과와 새 결정을 계속 갱신한다.
 
 ## 프로젝트 개요
 
@@ -11,6 +11,45 @@
 
 ## 세션 기록
 
+### 2026-11-03 (현재 세션) — demo-app-test 실증 착수: 쓰기 프로브에서 권한 차단 확인
+
+사용자 지시: "다음 단계"의 demo-app-test 실증을 이어가되, 먼저 쓰기 프로브 → 시드 push.
+
+1. **현황 확인** — `demo-app-test`·`demo-app` 저장소는 사용자가 이미 생성(2026-11-03 06:18 UTC).
+   - `demo-app-test`: 빈 저장소(브랜치 0개), Pages `build_type=workflow` ✓ (Source=GitHub Actions 이미 설정됨)
+   - environment는 `github-pages`만 존재 → `production`(required reviewers) 미생성
+   - repo variable·secret 에는 접근 자체가 불가(아래 403) — PREVIEW_REF·DEPLOY_TOKEN 미확인
+2. **쓰기 프로브 결과: 전부 차단(403)** — 원인은 agent 토큰이 `miniapp-template` 1개 저장소에만
+   설치되어 있기 때문(fine-grained / GitHub App 설치 범위). 즉 코드 문제가 아니라 **연결 권한 문제**.
+   | 프로브 | 명령 | 결과 |
+   |---|---|---|
+   | git push | `git push origin probe/write-test` | `Permission to ... denied` 403 |
+   | Contents API | `PUT /repos/.../contents/PROBE.md` | `Resource not accessible by integration` 403 |
+   | Actions variables | `POST .../actions/variables` | 403 (miniapp-template에서도 403) |
+   | Environments 쓰기 | `PUT .../environments/production` | 403 |
+   | Secrets 쓰기 | `PUT .../actions/secrets/*` | 403 |
+   | 읽기(공개 저장소 메타·Pages·environments) | `GET ...` | 정상 (공개 정보라 인증 없이도 조회됨) |
+   → 시드 push는 실행하지 않았다. 실패한 프로브가 만든 부산물은 없다(빈 저장소 그대로, main 없음).
+3. **시드 도구 추가** — `scripts/seed.mjs` + `npm run seed`
+   - 커밋된 tree만 이동(작업 트리·index 무변경), 더러운 트리면 중단
+   - `app.config.json` devRepo ≠ 대상이면 거부, 원격 main이 이미 있으면 거부(`--replace`만 허용)
+   - 푸시 전 `git push --dry-run`으로 **쓰기 권한을 먼저 프로브** → 403이면 원인·조치 출력 후 중단
+   - `--remote=` 로 전송 URL 교체 가능(로컬 bare 저장소로 성공 경로 검증용)
+   - 검증: 로컬 bare 저장소에 시드 성공(35개 파일, 시드 커밋 1개, source-sha 기록) /
+     실제 대상 `demo-app-test`에서는 설계대로 쓰기 프로브 단계에서 403으로 중단
+4. **문서** — operations.md에 "저장소 시드" 절차 추가, 단일 preview 정책에
+   "variable 변경은 설정 권한 필요 / `preview.defaultRef`는 커밋으로 지정 → 에이전트만으로 preview 실증 가능" 보강.
+
+### 진행을 막고 있는 것 (사용자 조치 필요)
+
+- Arena의 GitHub 연결에 `zzexxous-pixel/demo-app-test`(와 이후 `demo-app`) 쓰기 권한 추가.
+  이것 없이는 시드 push·preview 실증·promote 실증 모두 불가.
+- 위 연결이 열리면 에이전트가 바로 할 수 있는 것: `npm run seed` → main push → deploy-dev 실행 확인
+  → `gh run list`/smoke 결과 확인 → preview 브랜치 + `preview.defaultRef` 커밋으로 preview 교체·종료 실증.
+- 사용자만 할 수 있는 것(설정 화면 필요): `production` environment + required reviewers 1명,
+  secret `DEPLOY_TOKEN`(demo-app Contents RW), (선택) repo variable `PREVIEW_REF`.
+  Pages Source는 `demo-app-test`·`miniapp-template` 모두 이미 Actions로 확인됨.
+
 ### 2026-11-01 (이전 세션, 오류로 유실 → 패치로 복구)
 
 - v1 템플릿 구조·스크립트·워크플로·예제 앱·테스트·문서 구현.
@@ -20,7 +59,7 @@
 - 패치에 binary diff가 없어 유실된 아이콘 3종은 체크리스트 모티프 PNG로 재생성
   (`src/assets/icon-192.png` 192×192, `icon-512.png` 512×512, `apple-touch-icon.png` 180×180).
 
-### 2026-11-02 (현재 세션) — 복원 후 결함 수정·검증 완료
+### 2026-11-02 (이전 세션) — 복원 후 결함 수정·검증 완료
 
 복원한 코드에서 실제 결함을 찾아 수정했다:
 
@@ -80,6 +119,7 @@
 | `scripts/verify-dist.mjs` | dist 산출물 검사 (allowlist·누락·참조·placeholder·격리 접두사) |
 | `scripts/smoke.mjs` | 배포 후 HTTP smoke (config 기반 앱명·마커·manifest 검사) |
 | `scripts/serve.mjs` | 정적 서버 (로컬/E2E용, `node scripts/serve.mjs [port] [dir]`) |
+| `scripts/seed.mjs` | 빈 개발 저장소 시드 (tree만 이동·대상 검증·쓰기 프로브 후 push) |
 | `scripts/init-project.mjs` | 템플릿 초기화 (app.config.json 생성) |
 | `scripts/validate-config.mjs` | app.config.json 검증 |
 | `src/` | 예제 앱 (체크리스트·테마·앱 정보·설치 버튼·PWA) |
@@ -92,7 +132,7 @@
 
 ## 브랜치 / 배포
 
-- 현재 작업 브랜치: `arena/9934864f-miniapp-template`
+- 현재 작업 브랜치: `arena/11443e40-miniapp-template`
 - 템플릿 저장소: https://github.com/zzexxous-pixel/miniapp-template
 - 예제 dev 저장소 `demo-app-test` / 운영 `demo-app`은 **아직 미생성** (user approval 필요).
   생성 후 app.config.json의 devRepo/prodRepo·URL은 이미 그 이름을 가정하고 있다.
@@ -117,6 +157,7 @@
 ```bash
 npm ci
 npm run check           # config 검증
+npm run seed -- --dry-run   # 빈 개발 저장소 시드 사전 검사 + 쓰기 권한 프로브
 npm run test:unit       # 단위 테스트 13개
 npm run build -- --env=production   # (또는 development/preview)
 npm run verify:dist     # dist 산출물 검사
@@ -138,6 +179,13 @@ npm run test:smoke      # 배포 후 smoke (SMOKE_URL 필수)
 - GitHub 리포 설정(template 여부·Pages·environment·PREVIEW_REF·DEPLOY_TOKEN)과
   demo-app-test/demo-app 생성·실배포는 사용자 승인 대기.
 
+## 확인 상태 (2026-11-03)
+
+- demo-app-test / demo-app 저장소 생성 확인 (사용자 수행).
+- demo-app-test: 빈 저장소, Pages build_type=workflow ✓, environment `production` 없음.
+- 시드 도구 로컬 검증: 로컬 bare 저장소에 35개 파일 시드 성공, 시드 커밋 1개, source-sha 기록 확인.
+- demo-app-test 실 쓰기: git push·Contents·variables·environments·secrets 모두 403 (연결 권한 범위 밖).
+
 ### 결정: 템플릿 저장소(self)에도 Pages 켜기 (2026-11-02) — 실행 완료
 
 - 목적: main push마다 deploy-dev(build→E2E→Pages→smoke)가 템플릿 자기 자신을 검증.
@@ -154,10 +202,13 @@ npm run test:smoke      # 배포 후 smoke (SMOKE_URL 필수)
 ## 다음 단계
 
 1. (완료 2026-11-02) PR #1 병합 + 템플릿 저장소 첫 self-deploy(smoke 포함) 성공.
-2. 사용자 승인 후: demo-app-test 생성 → main push → Pages Source=GitHub Actions 확인
-   → PREVIEW_REF로 preview 교체/종료 정책 실증 → demo-app(운영) 생성 → Pages main/(root) →
-   production environment + required reviewer 설정 → DEPLOY_TOKEN(fine-grained, demo-app Contents RW) 등록
-   → promote 실행 → smoke·릴리스·롤백(Release zip) 실증.
+2. demo-app-test 실증 — **쓰기 프로브에서 403 차단, 사용자 연결 권한 대기 중 (2026-11-03)**.
+   - (완료) 저장소 생성 확인, Pages Source=GitHub Actions 확인, 쓰기 프로브 5종, 시드 도구(`npm run seed`) 준비.
+   - (대기) Arena GitHub 연결에 demo-app-test/demo-app 권한 추가 → 그 즉시 `npm run seed` → main push.
+   - (대기) deploy-dev 자동 실행·smoke 확인 → preview 브랜치 + `preview.defaultRef` 커밋으로 교체/종료 실증.
+   - (사용자 설정) `production` environment + required reviewer 1명, secret `DEPLOY_TOKEN`,
+     (선택) repo variable `PREVIEW_REF`.
+   - (이후) demo-app Pages main/(root) 확인 → promote 실행 → smoke·Release·롤백(zip) 실증.
 3. 예제 검증 완료 후 기존 한자·하트튠 적용 계획 수립 (별도 승인).
 
 주의: agent 샌드박스는 github.io로 직접 curl 불가(네트워크 allowlist) — 라이브 URL 확인은
