@@ -11,6 +11,7 @@
     "build:dev": "node scripts/build.mjs --env=development",
     "build:preview": "node scripts/build.mjs --env=preview",
     "build:prod": "node scripts/build.mjs --env=production",
+    "seed": "node scripts/seed.mjs",
     "verify:dist": "node scripts/verify-dist.mjs",
     "test:unit": "node --test tests/unit/*.test.mjs",
     "test:e2e": "playwright test",
