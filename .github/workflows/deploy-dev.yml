@@ -36,19 +36,26 @@ jobs:
         run: npx playwright install --with-deps chromium && npm run test:e2e
       - name: 산출물 검사
         run: npm run verify:dist
-      - name: preview 조립 (PREVIEW_REF 지정 시)
+      - name: preview 조립 (PREVIEW_REF 변수 → app.config preview.defaultRef 순)
         env:
           PREVIEW_REF: ${{ vars.PREVIEW_REF }}
         run: |
-          if [ -n "${PREVIEW_REF}" ]; then
-            REF="${PREVIEW_REF#origin/}"
+          # 대상 선택: repo variable 이 우선, 비어 있으면 app.config.json preview.defaultRef 사용.
+          # 둘 다 비어 있으면 preview 없이 dev만 배포한다.
+          REF="${PREVIEW_REF}"
+          if [ -z "${REF}" ]; then
+            REF=$(node -e "console.log(require('./app.config.json').preview?.defaultRef||'')")
+            [ -n "${REF}" ] && echo "variable 미지정 — config preview.defaultRef 사용: ${REF}"
+          fi
+          if [ -n "${REF}" ]; then
+            REF="${REF#origin/}"
             echo "preview 대상: ${REF}"
             git fetch --depth=1 origin "${REF}"
             # main 워크트리를 오염시키지 않도록 별도 워크트리에 checkout
             git worktree add --detach .preview-src FETCH_HEAD
             (cd .preview-src && npm run build -- --env=preview --out=../preview-dist)
           else
-            echo "PREVIEW_REF 미지정 — preview 없음"
+            echo "preview 대상 없음 — preview 없이 배포"
           fi
       - name: 사이트 조립 (dev 루트 + preview)
         run: |

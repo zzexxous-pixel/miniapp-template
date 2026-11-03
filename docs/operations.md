@@ -59,13 +59,16 @@
 ## 단일 preview 정책
 
 - preview는 하나만 유지한다.
-- PREVIEW_REF repo variable로 preview 대상 명시 (`origin/` 접두어는 자동 제거).
+- 대상 선택 순서: repo variable `PREVIEW_REF` → 비어 있으면 `app.config.json` 의 `preview.defaultRef` → 둘 다 없으면 preview 없이 배포.
+  (`origin/` 접두어는 자동 제거. variable 은 임시 대상 지정·긴급 제거용, defaultRef 는 저장소에 커밋되는 상시 대상)
 - 대상은 워크트리로 분리 checkout해 빌드하므로 main 워크트리에 영향 없음.
   preview 배포본의 build-info.sourceSha에 preview 커밋이 기록되어 대상을 추적할 수 있다.
 - PREVIEW_REF가 비어 있으면 preview 없이 dev만 배포된다 (preview 없음 = 정상 상태).
-- main dev 배포는 `/preview/`를 무조건 지우지 않는다: PREVIEW_REF가 있으면 재생성,
-  없으면 이전 preview를 배포하지 않는다 (사이트를 통째로 새로 조립하므로 제거됨).
-- PR 종료 시: 현재 PREVIEW_REF 대상이면 variable을 비우거나 새 대상으로 교체한다.
+- main dev 배포는 `/preview/`를 무조건 지우지 않는다: 대상(variable 또는 defaultRef)이 있으면
+  매 배포마다 그 대상으로 preview를 재생성해 유지하고, 대상이 없으면 이전 preview를 배포하지 않는다
+  (사이트를 통째로 새로 조립하므로 제거됨).
+- PR 종료 시: 대상이 그 PR 브랜치면 variable을 비우거나(임시 지정이었을 때) defaultRef를 새 대상/`''`로 되돌리는 커밋을 올린다.
+  PR 종료 자체가 배포를 지우지는 않는다 — 다음 main 배포부터 반영된다 (단일 슬롯 정책).
 - Arena 브랜치명은 어디에도 하드코딩하지 않는다.
 
 ## 환경 구분
