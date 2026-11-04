@@ -6,6 +6,7 @@
   "description": "demo-app — 미니 앱 템플릿 예제 앱",
   "scripts": {
     "init": "node scripts/init-project.mjs",
+    "seed": "node scripts/seed.mjs",
     "validate:config": "node scripts/validate-config.mjs",
     "build": "node scripts/build.mjs",
     "build:dev": "node scripts/build.mjs --env=development",

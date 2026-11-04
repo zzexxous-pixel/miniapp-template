@@ -32,8 +32,9 @@ async function get(file, { retries = 0 } = {}) {
   throw new Error(`${file}: HTTP 200 을 받지 못했습니다`);
 }
 
-// build-info.json (배포 전파 지연 대비 재시도)
-const info = await (await get('build-info.json', { retries: 3 })).json();
+// build-info.json (배포 전파 지연 대비 재시도 — legacy Pages 빌드가
+// smoke 재시도 윈도우(3회·약 20초) 이후에 완료될 수 있어 8회·약 40초로 확대)
+const info = await (await get('build-info.json', { retries: 8 })).json();
 if (process.env.EXPECTED_SHA) {
   assert.equal(info.sourceSha, process.env.EXPECTED_SHA, 'source SHA mismatch');
 }

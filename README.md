@@ -24,6 +24,8 @@ npm run init -- --app-id=my-app --short-name="내 앱" --dev-repo=owner/my-app-t
 | `npm run test:e2e` | Playwright E2E (Desktop/Mobile Chromium) |
 | `npm run serve` | 로컬 정적 서버 |
 | `npm run test:smoke` | 배포 후 smoke |
+| `npm run seed -- --dry-run` | 빈 개발 저장소 시드 사전 검사 + 쓰기 권한 프로브 |
+| `npm run seed` | 빈 개발 저장소에 시드 (최초 1회, devRepo 대상) |
 
 ## 환경
 
